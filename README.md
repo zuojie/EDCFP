@@ -56,67 +56,62 @@ windows 7的hosts文件增加一行：192.168.225.132 hadoop，然后互ping保�
 
 
 * step 2：   
-     hadoop中运行task的机器称为节点，erlang的分布式系统也采用节点的称呼。不同的erlang节点怎么和master秘密接头呢？通过一个cookie文件，这是不同的节点互相识别的暗号。文件名固定：.erlang.cookie，文件内容随意，但必须都是小写字符，因为erlang中小写字符表示常量。可在master机器上建立.erlang.cookie文件，然后输入：test_erlang_mapred，将其放在HOME目录（以笔者为例，windows的在：C:\Users\arvinpeng， Linux的在：/usr/local/lib/erlang），并分别将其拷贝到其他slave机器上的HOME目录。注意，erlang的安全机制要求linux目录上的.erlang.cookie文件最好运行chmod 400命令，保证只有运行erlang的所属用户可读，任何用户不可写。
-
+     hadoop中运行task的机器称为节点，erlang的分布式系统也采用节点的称呼。不同的erlang节点怎么和master秘密接头呢？通过一个cookie文件，这是不同的节点互相识别的暗号。文件名固定：.erlang.cookie，文件内容随意，但必须都是小写字符，因为erlang中小写字符表示常量。可在master机器上建立.erlang.cookie文件，然后输入：test_erlang_mapred，将其放在HOME目录（以笔者为例，windows的在：C:\Users\arvinpeng， Linux的在：/usr/local/lib/erlang），并分别将其拷贝到其他slave机器上的HOME目录。注意，erlang的安全机制要求linux目录上的.erlang.cookie文件最好运行chmod 400命令，保证只有运行erlang的所属用户可读，任何用户不可写。   
 
 * step 3：    
-      准备工作差不多了，开始编写代码。master机器的代码如下：
--module(pmap).
--export([start/4, map/2]).
+      准备工作差不多了，开始编写代码。master机器的代码如下：   
+`-module(pmap).`   
+`-export([start/4, map/2]).`   
 
+`map(Func, List) ->`    
+	`Pid = self(),`   
+	`MasterRes = lists:map(fun(I) -> spawn(fun() -> do_work(Pid, Func, I) end) end, List),`   
+	`io:format("master free~n"),`   
+	`receive`   
+		`{finished, SlaveRes} ->`    
+			`Res = lists:append(MasterRes, SlaveRes)`   
+	`end,`   
+	`R = reduced(Res),`   
+	`lists:foreach(fun(X) -> print(X) end, R).`   
 
-map(Func, List) ->
-	Pid = self(),
-	MasterRes = lists:map(fun(I) -> spawn(fun() -> do_work(Pid, Func, I) end) end, List),
-	io:format("master free~n"),
-	receive
-		{finished, SlaveRes} -> 
-			Res = lists:append(MasterRes, SlaveRes)
-	end,
-	R = reduced(Res),
-	lists:foreach(fun(X) -> print(X) end, R).
+`reduced([H|T]) ->`   
+	`receive`   
+		`{H, Res} ->`    
+			`[Res|reduced(T)]`   
+	`end;`   
+`reduced([]) ->`   
+	`[].`   
 
-
-reduced([H|T]) ->
-	receive
-		{H, Res} -> 
-			[Res|reduced(T)]
-	end;
-reduced([]) ->
-	[].
-
-
-print(Element) ->
-	io:format("~w~n", [Element]).
+`print(Element) ->`    
+	`io:format("~w~n", [Element]).`   
 	
-do_work(Parent, Func, I) ->
-	Parent ! {self(), (catch Func(I))}.
+`do_work(Parent, Func, I) ->`   
+	`Parent ! {self(), (catch Func(I))}.`   
 	
-start(SlaveNode, Func, List1, List2) ->
-	register(master, spawn(pmap, map, [Func, List1])),
-	spawn(SlaveNode, pmap, map, [Func, List2, master, node()]). %% 将master的节点名称传递过去
+`start(SlaveNode, Func, List1, List2) ->`   
+	`register(master, spawn(pmap, map, [Func, List1])),`   
+	`spawn(SlaveNode, pmap, map, [Func, List2, master, node()]). %% 将master的节点名称传递过去`   
 
 
-没错，核心部分借鉴了pmap的实现，嘿嘿。
-slave节点上代码如下：
-      1 -module(pmap).
-      2 -export([map/4]).
-      3 
-      4 map(Func, List, MasterName, MasterNode) ->
-      5         Res = lists:map(fun(I) -> spawn(fun() -> do_work(MasterName, MasterNode, Func, I) end) end, List),
-      6         io:format("slave free~n"),
-      7         {MasterName, MasterNode} ! {finished, Res}.
-      8 
-      9 do_work(MasterName, MasterNode, Func, I) ->
-     10         {MasterName, MasterNode} ! {self(), (catch Func(I))}.
+其中，核心部分借鉴了pmap的实现。   
+slave节点上代码如下：   
+      `1 -module(pmap).`   
+      `2 -export([map/4]).`   
+      `3`    
+      `4 map(Func, List, MasterName, MasterNode) ->`   
+      `5         Res = lists:map(fun(I) -> spawn(fun() -> do_work(MasterName, MasterNode, Func, I) end) end, List),`   
+      `6         io:format("slave free~n"),`   
+      `7         {MasterName, MasterNode} ! {finished, Res}.`   
+      `8`    
+      `9 do_work(MasterName, MasterNode, Func, I) ->`   
+      `10         {MasterName, MasterNode} ! {self(), (catch Func(I))}.`   
 
+master和slave通过消息进行交互，通过节点名 + 进程名/进程ID进行互相识别，辅以.erlang.cookie完成安全认证。这就大体解决了分布式系统通信的问题。       
 
-master和slave通过消息进行交互，通过节点名 + 进程名/进程ID进行互相识别，辅以.erlang.cookie完成安全认证。这就大体解决了分布式系统通信的问题。    
-
-
-step 4：
-      环境和代码都就位了，现在看下编译运行的过程，首先分别编译之：
+* step 4：   
+      环境和代码都就位了，现在看下编译运行的过程，首先分别编译之：   
 master ->
+![p1](http://zuojie.github.io/demo/edcfp_p1.png)
      
 首先用-sname参数指定erl节点名称：master，启动后master@arvinpeng-PC2就是master被其他slave初步找到的依据（还要配合进程相关的信息才能准确发现master进程）。
 然后在Ubuntu上进行相似的过程：
