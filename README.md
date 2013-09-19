@@ -112,7 +112,7 @@ master和slave通过消息进行交互，通过节点名 + 进程名/进程ID进
       环境和代码都就位了，现在看下编译运行的过程，首先分别编译之：   
 master   
 ![p1](http://zuojie.github.io/demo/edcfp_p1.png)   
-     
+         
 首先用-sname参数指定erl节点名称：master，启动后master@arvinpeng-PC2就是master被其他slave初步找到的依据（还要配合进程相关的信息才能准确发现master进程）。
 然后在Ubuntu上进行相似的过程：   
 slave   
