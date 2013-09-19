@@ -110,30 +110,30 @@ master和slave通过消息进行交互，通过节点名 + 进程名/进程ID进
 
 * step 4：   
       环境和代码都就位了，现在看下编译运行的过程，首先分别编译之：   
-master ->
-![p1](http://zuojie.github.io/demo/edcfp_p1.png)
+master   
+![p1](http://zuojie.github.io/demo/edcfp_p1.png)   
      
 首先用-sname参数指定erl节点名称：master，启动后master@arvinpeng-PC2就是master被其他slave初步找到的依据（还要配合进程相关的信息才能准确发现master进程）。
-然后在Ubuntu上进行相似的过程：
-slave ->
-
+然后在Ubuntu上进行相似的过程：   
+slave   
+![p2](http://zuojie.github.io/demo/edcfp_p2.png)   
          
- step 5:
-       编写用户函数，这里以一个求阶乘的用户函数为例，代码如下：
--module(factorial).
--export([fact/1]).
+* step 5:   
+       编写用户函数，这里以一个求阶乘的用户函数为例，代码如下：   
+`-module(factorial).`   
+`-export([fact/1]).`   
+
+`fact(0) -> 1;`   
+`fact(N) when N < 0 -> io:format("参数错误~n");`  
+`fact(N) when N > 0 -> N * fact(N - 1).`   
+同理，分别将factorial.erl放到master和slave的HOME目录，然后编译确保运行顺畅，正常。   
 
 
-fact(0) -> 1;
-fact(N) when N < 0 -> io:format("参数错误~n");
-fact(N) when N > 0 -> N * fact(N - 1).
-同理，分别将factorial.erl放到master和slave的HOME目录，然后编译确保运行顺畅，正常。
+* step 6：   
+      运行起这个简陋的分布式系统，如图所示   
+![p3](http://zuojie.github.io/demo/edcfp_p3.png)   
 
-
-step 6：
-      运行起这个简陋的分布式系统，如图所示
-
-在master上启动master的函数时，把slave节点位置传递了进去。
-红框中的提示表示master节点和slave节点计算完毕。从slave节点中进行标准输出只会在master的标准输出设备上显示。
-示例代码完成的功能是：
-将2个列表（你可以认为是一个大列表拆分成的2个列表）分别部署到2台机器上分别进行阶乘（map）计算，计算完毕之后汇总（reduced）到master机器上重新组合成一个list。
+在master上启动master的函数时，把slave节点位置传递了进去。   
+红框中的提示表示master节点和slave节点计算完毕。从slave节点中进行标准输出只会在master的标准输出设备上显示。   
+示例代码完成的功能是：   
+将2个列表（你可以认为是一个大列表拆分成的2个列表）分别部署到2台机器上分别进行阶乘（map）计算，计算完毕之后汇总（reduced）到master机器上重新组合成一个list。   
