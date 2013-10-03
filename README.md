@@ -14,10 +14,12 @@ ____
 map(Fun, List1) -> List2   
 
 > Types:   
-`Fun = fun((A) -> B) `  
-`List1 = [A]`   
-`List2 = [B]`   
-`A = B = term()`   
+```erlang
+Fun = fun((A) -> B) 
+List1 = [A]  
+List2 = [B]   
+A = B = term()
+```
 Takes a function from As to Bs, and a list of As and produces a list of Bs by applying the function to every element in the list. This function is used to obtain the return values. The evaluation order is implementation dependent.   
 
 
@@ -25,20 +27,22 @@ Takes a function from As to Bs, and a list of As and produces a list of Bs by ap
 
 
 试想如果我们把map放进erlang强大的spawn（用于产生“erlang进程”的方法）方法中，那就瞬间实现了分布式。于是erlang祖师爷Joe Armstrong 就开发了一个并行版的map：pmap（parallel map），实现过程套用了map-reduce思想。代码如下：   
-> `pmap(F, L) ->`   
-`S = self(),`     
-`Pids = lists:map(fun(I) ->`   
-`spawn(fun() -> do_f(S, F, I) end)`   
-`end, L),`   
-`gather(Pids).`   
-`gather([H|T]) ->`   
-`receive`   
-`{H, Ret} -> [Ret|gather(T)]`   
-`end;`   
-`gather([]) ->`   
-`[].`   
-`do_f(Parent, F, I) ->`   
-`Parent ! {self(), (catch F(I))}.`   
+```erlang
+pmap(F, L) ->   
+	S = self(),     
+	Pids = lists:map(fun(I) ->   
+	spawn(fun() -> do_f(S, F, I) end)   
+	end, L),   
+gather(Pids).   
+gather([H|T]) ->   
+receive   
+{H, Ret} -> [Ret|gather(T)]   
+end;   
+gather([]) ->   
+[].   
+do_f(Parent, F, I) ->   
+Parent ! {self(), (catch F(I))}.
+```
 
 
 简单，大方。   
