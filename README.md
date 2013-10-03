@@ -31,17 +31,17 @@ Takes a function from As to Bs, and a list of As and produces a list of Bs by ap
 pmap(F, L) ->   
 	S = self(),     
 	Pids = lists:map(fun(I) ->   
-	spawn(fun() -> do_f(S, F, I) end)   
-	end, L),   
-gather(Pids).   
+				spawn(fun() -> do_f(S, F, I) end)   
+			end, L),   
+	gather(Pids).   
 gather([H|T]) ->   
-receive   
-{H, Ret} -> [Ret|gather(T)]   
-end;   
+	receive   
+		{H, Ret} -> [Ret|gather(T)]   
+	end;   
 gather([]) ->   
-[].   
+	[].   
 do_f(Parent, F, I) ->   
-Parent ! {self(), (catch F(I))}.
+	Parent ! {self(), (catch F(I))}.
 ```
 
 
@@ -64,51 +64,48 @@ windows 7的hosts文件增加一行：192.168.225.132 hadoop，然后互ping保�
 
 * step 3：    
       准备工作差不多了，开始编写代码。master机器的代码如下：   
-`-module(pmap).`   
-`-export([start/4, map/2]).`   
-
-`map(Func, List) ->`    
-	`Pid = self(),`   
-	`MasterRes = lists:map(fun(I) -> spawn(fun() -> do_work(Pid, Func, I) end) end, List),`   
-	`io:format("master free~n"),`   
-	`receive`   
-		`{finished, SlaveRes} ->`    
-			`Res = lists:append(MasterRes, SlaveRes)`   
-	`end,`   
-	`R = reduced(Res),`   
-	`lists:foreach(fun(X) -> print(X) end, R).`   
-
-`reduced([H|T]) ->`   
-	`receive`   
-		`{H, Res} ->`    
-			`[Res|reduced(T)]`   
-	`end;`   
-`reduced([]) ->`   
-	`[].`   
-
-`print(Element) ->`    
-	`io:format("~w~n", [Element]).`   
-	
-`do_work(Parent, Func, I) ->`   
-	`Parent ! {self(), (catch Func(I))}.`   
-	
-`start(SlaveNode, Func, List1, List2) ->`   
-	`register(master, spawn(pmap, map, [Func, List1])),`   
-	`spawn(SlaveNode, pmap, map, [Func, List2, master, node()]). %% 将master的节点名称传递过去`   
+```erlang
+-module(pmap).   
+-export([start/4, map/2]).
+map(Func, List) ->    
+	Pid = self(),   
+	MasterRes = lists:map(fun(I) -> spawn(fun() -> do_work(Pid, Func, I) end) end, List),   
+	io:format("master free~n"),   
+	receive   
+		{finished, SlaveRes} ->    
+			Res = lists:append(MasterRes, SlaveRes)   
+	end,   
+	R = reduced(Res),   
+	lists:foreach(fun(X) -> print(X) end, R).   
+reduced([H|T]) ->   
+	receive   
+		{H, Res} ->    
+			[Res|reduced(T)]   
+	end;   
+reduced([]) ->   
+	[].   
+print(Element) ->    
+	io:format("~w~n", [Element]).   
+do_work(Parent, Func, I) ->   
+	Parent ! {self(), (catch Func(I))}.   
+start(SlaveNode, Func, List1, List2) ->   
+	register(master, spawn(pmap, map, [Func, List1])),   
+	spawn(SlaveNode, pmap, map, [Func, List2, master, node()]). %% 将master的节点名称传递过去 
+```
 
 
 其中，核心部分借鉴了pmap的实现。   
 slave节点上代码如下：   
-      `1 -module(pmap).`   
-      `2 -export([map/4]).`   
-      `3`    
-      `4 map(Func, List, MasterName, MasterNode) ->`   
-      `5         Res = lists:map(fun(I) -> spawn(fun() -> do_work(MasterName, MasterNode, Func, I) end) end, List),`   
-      `6         io:format("slave free~n"),`   
-      `7         {MasterName, MasterNode} ! {finished, Res}.`   
-      `8`    
-      `9 do_work(MasterName, MasterNode, Func, I) ->`   
-      `10         {MasterName, MasterNode} ! {self(), (catch Func(I))}.`   
+```erlang
+-module(pmap).   
+-export([map/4]).   
+map(Func, List, MasterName, MasterNode) ->   
+        Res = lists:map(fun(I) -> spawn(fun() -> do_work(MasterName, MasterNode, Func, I) end) end, List),   
+        io:format("slave free~n"),   
+        {MasterName, MasterNode} ! {finished, Res}.   
+do_work(MasterName, MasterNode, Func, I) ->   
+         {MasterName, MasterNode} ! {self(), (catch Func(I))}. 
+```
 
 master和slave通过消息进行交互，通过节点名 + 进程名/进程ID进行互相识别，辅以.erlang.cookie完成安全认证。这就大体解决了分布式系统通信的问题。       
 
@@ -124,12 +121,13 @@ slave
          
 * step 5:   
        编写用户函数，这里以一个求阶乘的用户函数为例，代码如下：   
-`-module(factorial).`   
-`-export([fact/1]).`   
-
-`fact(0) -> 1;`   
-`fact(N) when N < 0 -> io:format("参数错误~n");`  
-`fact(N) when N > 0 -> N * fact(N - 1).`   
+```erlang
+-module(factorial).   
+-export([fact/1]).   
+fact(0) -> 1;   
+fact(N) when N < 0 -> io:format("参数错误~n");  
+fact(N) when N > 0 -> N * fact(N - 1).
+```
 同理，分别将factorial.erl放到master和slave的HOME目录，然后编译确保运行顺畅，正常。   
 
 
